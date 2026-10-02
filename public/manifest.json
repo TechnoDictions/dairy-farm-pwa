@@ -1,0 +1,34 @@
+{
+  "name": "Lactis - Dairy Farm OS",
+  "short_name": "Lactis",
+  "description": "Offline-first dairy farm ERP, milking logs, health records, feed inventory, and customer credit ledger.",
+  "start_url": "/login",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#0B6AB5",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard & P&L",
+      "url": "/portal/admin/dashboard",
+      "description": "View real-time farm profit & loss"
+    },
+    {
+      "name": "Milking Station",
+      "url": "/portal/employee/milking",
+      "description": "Log session milk production"
+    },
+    {
+      "name": "Feed Inventory",
+      "url": "/portal/admin/feed",
+      "description": "Manage multi-month feed stock"
+    }
+  ]
+}
