@@ -35,6 +35,12 @@ BEGIN
     ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS subscription_plan TEXT NOT NULL DEFAULT 'Farm Pro Annual';
     ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS subscription_status TEXT NOT NULL DEFAULT 'inactive';
     ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ;
+    ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS farm_name TEXT;
+    ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS device_fingerprint TEXT;
+    ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN DEFAULT TRUE;
+    ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS trial_used BOOLEAN DEFAULT FALSE;
+    ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMPTZ;
+    ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS trial_last_online_at TIMESTAMPTZ;
     ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
     ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 END $$;

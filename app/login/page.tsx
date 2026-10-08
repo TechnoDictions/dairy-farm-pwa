@@ -1,7 +1,7 @@
 'use client'
 
 import { createClient } from '@/utils/supabase/client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { 
@@ -9,6 +9,7 @@ import {
   Smartphone, Monitor, Sparkles, AlertCircle, ArrowRight, 
   CheckCircle2, Download, LogIn 
 } from 'lucide-react'
+import InstallModal from '@/components/InstallModal'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -16,6 +17,17 @@ export default function LoginPage() {
   
   const [activeTab, setActiveTab] = useState<'admin' | 'employee'>('admin')
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
+  const [showInstallModal, setShowInstallModal] = useState(false)
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
+
+  useEffect(() => {
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault()
+      setDeferredPrompt(e)
+    }
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall)
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall)
+  }, [])
   
   // Admin Email/Password form
   const [email, setEmail] = useState('')
@@ -87,7 +99,7 @@ export default function LoginPage() {
           } catch (initErr) {
             console.warn('Profile initialization note:', initErr)
           }
-          router.push('/billing')
+          router.push('/onboarding')
         } else {
           setSuccessMsg('Account created! You can now sign in with your email.')
           setAuthMode('signin')
@@ -106,11 +118,24 @@ export default function LoginPage() {
           try {
             const { data: prof } = await supabase
               .from('profiles')
-              .select('subscription_status')
+              .select('subscription_status, full_name, trial_ends_at')
               .eq('id', data.user.id)
               .maybeSingle()
 
-            if (prof && prof.subscription_status === 'active') {
+            const hasFarm = Boolean(data.user.user_metadata?.farm_name || data.user.user_metadata?.onboarded);
+            const hasName = Boolean(data.user.user_metadata?.full_name || prof?.full_name);
+            const isOnboarded = hasFarm && hasName;
+
+            if (!isOnboarded) {
+              router.push('/onboarding')
+            } else if (prof?.subscription_status === 'trial') {
+              const trialEnds = prof.trial_ends_at ? new Date(prof.trial_ends_at).getTime() : 0
+              if (trialEnds > Date.now()) {
+                router.push('/portal/admin/dashboard')
+              } else {
+                router.push('/billing')
+              }
+            } else if (prof?.subscription_status === 'active') {
               const { data: latestSub } = await supabase
                 .from('subscriptions')
                 .select('current_period_end, status')
@@ -402,12 +427,13 @@ export default function LoginPage() {
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             PWA Offline-Ready
           </span>
-          <Link 
-            href="/#download"
-            className="text-[var(--primary)] font-bold hover:underline flex items-center gap-1"
+          <button 
+            type="button"
+            onClick={() => setShowInstallModal(true)}
+            className="text-[var(--primary)] font-bold hover:underline flex items-center gap-1.5 bg-blue-50/80 hover:bg-blue-100 px-3 py-1 rounded-xl transition-colors cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" /> Install App
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -417,6 +443,16 @@ export default function LoginPage() {
           Lactis powered by <span className="font-black text-[var(--text-main)]">Blazas</span>
         </p>
       </footer>
+
+      {/* App Install Modal */}
+      <InstallModal
+        isOpen={showInstallModal}
+        onClose={() => setShowInstallModal(false)}
+        deferredPrompt={deferredPrompt}
+        onPromptAccepted={() => {
+          setDeferredPrompt(null);
+        }}
+      />
     </div>
   )
 }

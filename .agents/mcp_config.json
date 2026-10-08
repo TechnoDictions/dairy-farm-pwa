@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://postgres.jxgzpkeadbmjacopmhub:6r!A@7H@+jkn6L7@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres"
+      ],
+      "env": {
+        "SUPABASE_URL": "https://jxgzpkeadbmjacopmhub.supabase.co",
+        "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4Z3pwa2VhZGJtamFjb3BtaHViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4NDk4NzAsImV4cCI6MjEwMjQyNTg3MH0.HNfYwUSM4vY7zNzeQGdkNNOAKiYWKRApC8YoqXUmFYk"
+      }
+    },
+    "supabase-remote": {
+      "serverUrl": "https://mcp.supabase.com/mcp"
+    }
+  }
+}

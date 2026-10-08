@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     }
 
     const payableAmount = plan.introPrice;
-    const durationMonths = planId === 'starter' ? 1 : planId === 'pro' ? 12 : 24;
+    const durationMonths = planId === 'starter' ? 1 : 12;
     const expiryDate = new Date(Date.now() + durationMonths * 30 * 24 * 60 * 60 * 1000);
     const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
 

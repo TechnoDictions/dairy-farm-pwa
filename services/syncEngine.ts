@@ -93,6 +93,15 @@ class SyncEngine {
           userId = user.id;
           if (typeof window !== 'undefined') {
             localStorage.setItem('lactis_active_user_id', user.id);
+            // Background trial daily check-in & expiration verification
+            fetch('/api/trial/ping', { method: 'POST' })
+              .then(r => r.json())
+              .then(d => {
+                if (d && d.status === 'expired' && window.location.pathname.startsWith('/portal')) {
+                  window.location.href = '/billing?status=trial_expired';
+                }
+              })
+              .catch(() => {});
           }
         }
       } catch (e) {

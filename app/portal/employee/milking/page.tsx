@@ -3,11 +3,12 @@
 import { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../../../db/db';
-import { ArrowLeft, CheckCircle2, Search, Trophy } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Search, Trophy, X } from 'lucide-react';
 import Link from 'next/link';
 
 export default function BatchMilkingEntry() {
   const [success, setSuccess] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const [entries, setEntries] = useState<Record<string, string>>({});
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState<'Today' | 'Week' | 'Month' | 'Year'>('Week');
@@ -59,14 +60,38 @@ export default function BatchMilkingEntry() {
 
   const handleBatchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const timestamp = new Date().toISOString();
-    const logsToSave = [];
+    setErrorMsg('');
+    const now = new Date();
+    const timestamp = now.toISOString();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const endOfDay = startOfDay + 24 * 60 * 60 * 1000;
+    const logsToSave: any[] = [];
 
     for (const [tag, yieldStr] of Object.entries(entries)) {
       if (yieldStr && parseFloat(yieldStr) > 0) {
+        const yieldVal = parseFloat(yieldStr);
+
+        // Calculate total yield already recorded for this cow TODAY
+        const existingToday = (logs || [])
+          .filter(l => 
+            l.tag.toLowerCase() === tag.toLowerCase() &&
+            new Date(l.timestamp).getTime() >= startOfDay &&
+            new Date(l.timestamp).getTime() < endOfDay
+          )
+          .reduce((sum, l) => sum + (l.yieldLiters || 0), 0);
+
+        const projectedDaily = existingToday + yieldVal;
+        if (projectedDaily > 200) {
+          const maxRemaining = Math.max(0, 200 - existingToday);
+          setErrorMsg(
+            `Daily production limit (200L) exceeded for Cow ${tag}! Already produced ${existingToday.toFixed(1)}L today. Maximum additional allowed is ${maxRemaining.toFixed(1)}L.`
+          );
+          return;
+        }
+
         logsToSave.push({
           tag,
-          yieldLiters: parseFloat(yieldStr),
+          yieldLiters: yieldVal,
           timestamp,
           isSynced: false
         });
@@ -76,7 +101,7 @@ export default function BatchMilkingEntry() {
         if (cowToUpdate) {
           const currentStatus = (cowToUpdate.status || '').toLowerCase();
           if (currentStatus !== 'pregnant' && currentStatus !== 'colostrum') {
-            const newStatus = parseFloat(yieldStr) > 0 ? 'Lactating' : 'Dry';
+            const newStatus = yieldVal > 0 ? 'Lactating' : 'Dry';
             if (currentStatus !== newStatus.toLowerCase()) {
               await db.Livestock.update(cowToUpdate.id!, { status: newStatus as any });
             }
@@ -163,6 +188,13 @@ export default function BatchMilkingEntry() {
           </div>
         )}
 
+        {errorMsg && (
+          <div className="bg-rose-50 border-b border-rose-200 text-rose-700 px-6 py-3.5 flex items-center gap-2 text-sm font-bold">
+            <X className="w-5 h-5 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
         <div className="p-6 border-b border-[var(--border)] relative bg-[var(--bg-card)] z-10">
           <Search className="absolute left-10 top-1/2 -translate-y-1/2 text-[var(--text-muted)] w-5 h-5" />
           <input 
@@ -181,7 +213,7 @@ export default function BatchMilkingEntry() {
                 <th className="py-4 px-6 font-bold w-16 text-center">Rank</th>
                 <th className="py-4 px-6 font-bold w-1/4">Tag & Name</th>
                 <th className="py-4 px-6 font-bold w-1/4">Total Yield ({period})</th>
-                <th className="py-4 px-6 font-bold">Session Yield (Liters)</th>
+                <th className="py-4 px-6 font-bold">Session Yield (Liters, Max 200L)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
@@ -206,6 +238,8 @@ export default function BatchMilkingEntry() {
                     <input 
                       type="number"
                       step="0.1"
+                      min="0"
+                      max="200"
                       placeholder="0.0"
                       value={entries[cow.tag] || ''}
                       onChange={(e) => handleInputChange(cow.tag, e.target.value)}

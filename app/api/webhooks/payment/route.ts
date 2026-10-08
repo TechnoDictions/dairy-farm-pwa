@@ -5,18 +5,30 @@ import crypto from 'crypto';
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
-    const signature = req.headers.get('x-sfpy-signature') || req.headers.get('x-signature') || req.headers.get('stripe-signature') || '';
-    const webhookSecret = process.env.SAFEPAY_SECRET_KEY || process.env.PAYMENT_WEBHOOK_SECRET || 'dcfb5afdd690cd8644ca81c446b2cf8da6ab0fc774d06277ea6b311f19ae3e45';
+    const paddleSignature = req.headers.get('paddle-signature') || req.headers.get('Paddle-Signature') || '';
+    const webhookSecret = (process.env.PADDLE_WEBHOOK_SECRET_KEY || process.env.PAYMENT_WEBHOOK_SECRET || '').trim();
 
-    // Cryptographic signature verification
-    if (signature && process.env.NODE_ENV === 'production') {
-      const hmac = crypto.createHmac('sha256', webhookSecret);
-      const digest = hmac.update(rawBody).digest('hex');
-      if (signature !== digest) {
-        return NextResponse.json(
-          { success: false, error: 'Invalid webhook cryptographic signature.' },
-          { status: 400 }
-        );
+    // 1. Cryptographic Paddle Webhook Signature Verification
+    if (paddleSignature && webhookSecret) {
+      try {
+        const parts = paddleSignature.split(';');
+        const ts = parts.find((p) => p.startsWith('ts='))?.split('=')[1];
+        const h1 = parts.find((p) => p.startsWith('h1='))?.split('=')[1];
+
+        if (ts && h1) {
+          const signedPayload = `${ts}:${rawBody}`;
+          const computedHash = crypto.createHmac('sha256', webhookSecret).update(signedPayload).digest('hex');
+          
+          if (computedHash !== h1) {
+            console.error('Invalid Paddle webhook signature verification.');
+            return NextResponse.json(
+              { success: false, error: 'Invalid webhook signature.' },
+              { status: 400 }
+            );
+          }
+        }
+      } catch (sigErr) {
+        console.warn('Paddle signature verification parsing warning:', sigErr);
       }
     }
 
@@ -27,27 +39,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid JSON payload' }, { status: 400 });
     }
 
-    // Safepay webhook payload format normalization
-    const isSafepay = payload?.data?.tracker || payload?.notification;
-    const sfData = payload?.data || {};
+    const eventType = payload.event_type || payload.type || 'transaction.completed';
+    const eventData = payload.data || {};
 
-    const targetUserId = payload.userId || sfData?.metadata?.userId || sfData?.client_reference_id || sfData?.user_id;
-    const targetPlan = payload.planId || sfData?.metadata?.planName || sfData?.metadata?.planId || 'Farm Pro Annual';
-    const targetTxId = payload.transactionId || sfData?.tracker?.token || sfData?.token || sfData?.id || `TRX-${Date.now()}`;
-    const targetAmount = payload.amount || sfData?.amount || 2199;
-    const targetMethod = payload.paymentMethod || 'Safepay (Debit/Credit)';
+    // 2. Extract Customer & Subscription Information
+    const customData = eventData.custom_data || {};
+    const targetUserId = customData.user_id || customData.userId || payload.user_id;
+    const planName = customData.plan_name || customData.plan_id || eventData.items?.[0]?.price?.name || 'Farm Pro Annual';
+    const targetTxId = eventData.id || eventData.transaction_id || `PADDLE-${Date.now()}`;
+    
+    // Amount
+    let targetAmount = 2199;
+    if (eventData.details?.totals?.total) {
+      targetAmount = parseFloat(eventData.details.totals.total) / 100;
+    } else if (eventData.items?.[0]?.price?.unit_price?.amount) {
+      targetAmount = parseFloat(eventData.items[0].price.unit_price.amount) / 100;
+    }
+
+    const targetMethod = eventData.payment_method?.type || 'Paddle (Credit/Debit/ApplePay)';
 
     if (!targetUserId) {
-      console.warn('Webhook received without explicit userId, logging transaction:', payload);
-      return NextResponse.json(
-        { success: false, error: 'Missing userId in webhook payload.' },
-        { status: 400 }
-      );
+      console.warn('[Paddle Webhook Note] Event received without user_id in custom_data:', eventType, targetTxId);
+      // Return 200 to acknowledge Paddle receipt
+      return NextResponse.json({ success: true, message: 'Event logged.' });
     }
 
     const adminSupabase = createAdminClient();
 
-    // Deduplication / Anti-Replay check
+    // 3. Deduplication / Anti-Replay check
     const { data: existingTx } = await adminSupabase
       .from('payment_transactions')
       .select('id')
@@ -61,23 +80,29 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Calculate expiration: 30 days for Starter, 365 days for Annual, 730 for Enterprise
-    const durationDays = targetPlan.toLowerCase().includes('starter') ? 30 : targetPlan.toLowerCase().includes('enterprise') ? 730 : 365;
-    const periodEnd = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
-    const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
+    // 4. Calculate Expiration Period
+    const isStarter = planName.toLowerCase().includes('starter') || planName.toLowerCase().includes('monthly');
+    const durationDays = isStarter ? 30 : 365;
+    
+    let periodEnd = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
+    if (eventData.current_billing_period?.ends_at) {
+      periodEnd = new Date(eventData.current_billing_period.ends_at);
+    }
 
-    // 1. Update Profile Subscription Status
+    const invoiceNumber = `PAD-${Date.now().toString().slice(-6)}`;
+
+    // 5. Update Profile Subscription Status in Supabase
     await adminSupabase.from('profiles').upsert({
       id: targetUserId,
-      subscription_plan: targetPlan,
+      subscription_plan: planName,
       subscription_status: 'active',
       updated_at: new Date().toISOString(),
     });
 
-    // 2. Insert into Subscriptions Table
+    // 6. Insert into Subscriptions Table
     await adminSupabase.from('subscriptions').insert({
       user_id: targetUserId,
-      plan_tier: targetPlan,
+      plan_tier: planName,
       status: 'active',
       billing_cycle: durationDays === 30 ? 'monthly' : 'yearly',
       amount_pkr: targetAmount,
@@ -89,14 +114,14 @@ export async function POST(req: NextRequest) {
       is_verified: true,
     });
 
-    // 3. Insert into Payment Transactions Audit Table
+    // 7. Insert into Payment Transactions Audit Table
     try {
       await adminSupabase.from('payment_transactions').insert({
         trx_id: targetTxId,
         user_id: targetUserId,
         farm_id: targetUserId,
         amount: targetAmount,
-        currency: 'PKR',
+        currency: eventData.currency_code || 'USD',
         payment_method: targetMethod,
         status: 'succeeded',
         metadata: payload,
@@ -108,12 +133,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Subscription atomically activated via Safepay webhook.',
+      message: 'Subscription successfully activated via Paddle webhook.',
       invoiceNumber,
       expiresAt: periodEnd.toISOString(),
     });
   } catch (error: any) {
-    console.error('Payment webhook error:', error);
+    console.error('Paddle Webhook Error:', error);
     return NextResponse.json(
       { success: false, error: error.message || 'Internal webhook error' },
       { status: 500 }

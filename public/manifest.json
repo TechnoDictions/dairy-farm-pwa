@@ -1,13 +1,53 @@
 {
+  "id": "/",
   "name": "Lactis - Dairy Farm OS",
   "short_name": "Lactis",
-  "description": "Offline-first dairy farm ERP, milking logs, health records, feed inventory, and customer credit ledger.",
-  "start_url": "/login",
+  "description": "Offline-first dairy farm ERP, milking logs, livestock management, feed inventory, and customer credit ledger.",
+  "start_url": "/portal/admin/dashboard",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#F8FAFC",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "background_color": "#08101E",
   "theme_color": "#0B6AB5",
   "orientation": "any",
+  "categories": ["business", "productivity", "utilities"],
   "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
     {
       "src": "/favicon.ico",
       "sizes": "64x64 32x32 24x24 16x16",

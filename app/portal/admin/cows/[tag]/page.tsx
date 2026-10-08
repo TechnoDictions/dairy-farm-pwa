@@ -201,6 +201,24 @@ export default function CowProfile() {
     e.preventDefault();
     const yieldNum = parseFloat(newMilkYield);
     if (!isNaN(yieldNum) && yieldNum >= 0) {
+      const sessionDate = new Date(newMilkTime);
+      const startOfDay = new Date(sessionDate.getFullYear(), sessionDate.getMonth(), sessionDate.getDate()).getTime();
+      const endOfDay = startOfDay + 24 * 60 * 60 * 1000;
+
+      const existingDailyTotal = (rawMilkingLogs || [])
+        .filter(l => 
+          new Date(l.timestamp).getTime() >= startOfDay &&
+          new Date(l.timestamp).getTime() < endOfDay
+        )
+        .reduce((sum, l) => sum + (l.yieldLiters || 0), 0);
+
+      const projectedDaily = existingDailyTotal + yieldNum;
+      if (projectedDaily > 200) {
+        const maxRemaining = Math.max(0, 200 - existingDailyTotal);
+        alert(`Daily production limit (200L) exceeded for this date! Already recorded: ${existingDailyTotal.toFixed(1)}L. Maximum additional allowed on this date is ${maxRemaining.toFixed(1)}L.`);
+        return;
+      }
+
       await db.MilkingLogs.add({
         tag: cow!.tag,
         yieldLiters: yieldNum,
@@ -1038,17 +1056,18 @@ export default function CowProfile() {
             <form onSubmit={handleAddMilkLog} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">
-                  Yield (in Liters)
+                  Yield (in Liters, Max 200L)
                 </label>
                 <input
                   type="number"
                   step="0.1"
                   required
                   min="0"
+                  max="200"
                   autoFocus
                   value={newMilkYield}
                   onChange={e => setNewMilkYield(e.target.value)}
-                  placeholder="e.g. 14.5"
+                  placeholder="e.g. 14.5 (max 200L)"
                   className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl py-3 px-4 text-lg font-black text-[var(--text-main)] focus:outline-none focus:border-[#0B6AB5]"
                 />
               </div>

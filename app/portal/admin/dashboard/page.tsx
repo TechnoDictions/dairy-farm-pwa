@@ -11,6 +11,7 @@ import {
   ChevronRight, Sparkles, Wallet 
 } from 'lucide-react';
 import Link from 'next/link';
+import WelcomeTour from '@/components/WelcomeTour';
 
 export default function AdminDashboard() {
   const [period, setPeriod] = useState<'Today' | 'This Week' | 'This Month' | 'This Year'>('This Month');
@@ -319,6 +320,9 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-8 relative">
+      {/* Welcome Tour — shown once for new paid subscribers */}
+      <WelcomeTour />
+
       {/* Header & Filter Controls */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>

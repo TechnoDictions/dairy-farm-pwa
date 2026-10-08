@@ -71,6 +71,8 @@ export default function AdminMilkingSection() {
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [selectedCow, allLogs]);
 
+  const [errorMsg, setErrorMsg] = useState('');
+
   const updateCowStatus = async (tag: string, yieldLiters: number) => {
     const cowToUpdate = await db.Livestock.where('tag').equals(tag).first();
     if (cowToUpdate) {
@@ -88,8 +90,36 @@ export default function AdminMilkingSection() {
 
   const handleInstantSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg('');
     if (selectedCow && newYield) {
       const yieldLiters = parseFloat(newYield);
+      if (isNaN(yieldLiters) || yieldLiters < 0) {
+        setErrorMsg('Please enter a valid milk yield.');
+        return;
+      }
+
+      // Calculate total yield already logged for this cow TODAY
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const endOfDay = startOfDay + 24 * 60 * 60 * 1000;
+
+      const cowTodayLogs = (allLogs || []).filter(l => 
+        l.tag.toLowerCase() === selectedCow.tag.toLowerCase() &&
+        new Date(l.timestamp).getTime() >= startOfDay &&
+        new Date(l.timestamp).getTime() < endOfDay
+      );
+
+      const alreadyProducedToday = cowTodayLogs.reduce((sum, l) => sum + (l.yieldLiters || 0), 0);
+      const projectedDailyTotal = alreadyProducedToday + yieldLiters;
+
+      if (projectedDailyTotal > 200) {
+        const maxRemaining = Math.max(0, 200 - alreadyProducedToday);
+        setErrorMsg(
+          `Daily production limit (200L) exceeded for ${selectedCow.name} (${selectedCow.tag})! Already produced ${alreadyProducedToday.toFixed(1)}L today. Maximum additional allowed is ${maxRemaining.toFixed(1)}L.`
+        );
+        return;
+      }
+
       await db.MilkingLogs.add({
         tag: selectedCow.tag,
         yieldLiters: yieldLiters,
@@ -104,8 +134,39 @@ export default function AdminMilkingSection() {
   };
 
   const handleSaveEdit = async (logId: number) => {
+    setErrorMsg('');
     if (editYield) {
       const yieldLiters = parseFloat(editYield);
+      if (isNaN(yieldLiters) || yieldLiters < 0) {
+        setErrorMsg('Please enter a valid milk yield.');
+        return;
+      }
+
+      const targetLog = (allLogs || []).find(l => l.id === logId);
+      if (targetLog) {
+        const targetDate = new Date(targetLog.timestamp);
+        const startOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate()).getTime();
+        const endOfDay = startOfDay + 24 * 60 * 60 * 1000;
+
+        const otherLogsToday = (allLogs || []).filter(l => 
+          l.id !== logId &&
+          l.tag.toLowerCase() === targetLog.tag.toLowerCase() &&
+          new Date(l.timestamp).getTime() >= startOfDay &&
+          new Date(l.timestamp).getTime() < endOfDay
+        );
+
+        const alreadyProducedToday = otherLogsToday.reduce((sum, l) => sum + (l.yieldLiters || 0), 0);
+        const projectedDailyTotal = alreadyProducedToday + yieldLiters;
+
+        if (projectedDailyTotal > 200) {
+          const maxRemaining = Math.max(0, 200 - alreadyProducedToday);
+          setErrorMsg(
+            `Daily production limit (200L) exceeded for ${targetLog.tag}! Other logs on this date total ${alreadyProducedToday.toFixed(1)}L. Max allowed for this entry is ${maxRemaining.toFixed(1)}L.`
+          );
+          return;
+        }
+      }
+
       await db.MilkingLogs.update(logId, {
         yieldLiters: yieldLiters,
         isSynced: false
@@ -217,6 +278,13 @@ export default function AdminMilkingSection() {
               </div>
             </div>
 
+            {errorMsg && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl flex items-center gap-3 spring-transition mb-6 text-sm font-bold">
+                <X className="w-5 h-5 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+
             {successMsg && (
               <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl flex items-center gap-3 spring-transition mb-6">
                 <CheckCircle2 className="w-5 h-5" />
@@ -231,17 +299,18 @@ export default function AdminMilkingSection() {
                   type="number"
                   step="0.1"
                   min="0"
+                  max="200"
                   required
-                  placeholder="Enter yield in Liters..."
+                  placeholder="Enter yield in Liters (max 200L)..."
                   value={newYield}
                   onChange={(e) => setNewYield(e.target.value)}
                   className="flex-1 bg-white border border-[var(--border)] rounded-xl py-3 px-4 text-lg font-bold focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20 transition-all"
                 />
-                <button type="submit" className="bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-bold py-3 px-6 rounded-xl shadow-md transition-all whitespace-nowrap">
+                <button type="submit" className="bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-bold py-3 px-6 rounded-xl shadow-md transition-all whitespace-nowrap cursor-pointer">
                   Save Yield
                 </button>
               </form>
-              <p className="text-xs text-[var(--text-muted)] mt-2 font-medium">Entering 0 will automatically mark the cow as Dry.</p>
+              <p className="text-xs text-[var(--text-muted)] mt-2 font-medium">Entering 0 marks cow as Dry. Maximum allowed single yield is <strong>200 Liters</strong>.</p>
             </div>
 
             <div>

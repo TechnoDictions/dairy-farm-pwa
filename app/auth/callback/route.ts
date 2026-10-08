@@ -39,20 +39,20 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
-      let finalRedirect = '/billing'
+      let finalRedirect = '/onboarding'
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
           const adminSupabase = createAdminClient()
           
           // 1. Fetch user profile from Supabase
-          const { data: profile, error: profileErr } = await adminSupabase
+          const { data: profile } = await adminSupabase
             .from('profiles')
             .select('*')
             .eq('id', user.id)
             .maybeSingle()
 
-          // 2. If profile does not exist, initialize it with 'inactive' subscription status
+          // 2. If profile does not exist, initialize it with core fields
           if (!profile) {
             const displayName = 
               user.user_metadata?.full_name || 
@@ -61,21 +61,43 @@ export async function GET(request: NextRequest) {
               user.email?.split('@')[0] || 
               'Farm Admin'
 
-            await adminSupabase.from('profiles').insert({
+            await supabase.from('profiles').upsert({
               id: user.id,
               email: user.email,
               full_name: displayName,
               role: 'admin',
               subscription_status: 'inactive',
-              subscription_plan: null,
+              subscription_plan: 'Farm Pro Annual',
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             })
+          }
 
-            finalRedirect = '/billing'
+          const hasFarm = Boolean(user.user_metadata?.farm_name || user.user_metadata?.onboarded);
+          const hasName = Boolean(user.user_metadata?.full_name || profile?.full_name);
+          const isOnboarded = hasFarm && hasName;
+
+          if (!isOnboarded) {
+            // Farm name or owner name is not yet onboarded
+            finalRedirect = '/onboarding'
           } else {
-            // 3. Profile exists: Check if subscription is active and within valid period
-            if (profile.subscription_status === 'active') {
+            // 3. Profile Onboarded: Check subscription / trial status
+            const now = Date.now()
+
+            if (profile?.subscription_status === 'trial') {
+              const trialEnds = profile.trial_ends_at ? new Date(profile.trial_ends_at).getTime() : 0
+              if (trialEnds > now) {
+                finalRedirect = next && next !== '/billing' ? next : '/portal/admin/dashboard'
+              } else {
+                // Trial expired
+                await supabase
+                  .from('profiles')
+                  .update({ subscription_status: 'inactive', updated_at: new Date().toISOString() })
+                  .eq('id', user.id)
+
+                finalRedirect = '/billing'
+              }
+            } else if (profile?.subscription_status === 'active') {
               const { data: latestSub } = await adminSupabase
                 .from('subscriptions')
                 .select('current_period_end, status')
@@ -88,13 +110,12 @@ export async function GET(request: NextRequest) {
               let isExpired = false
               if (latestSub?.current_period_end) {
                 const expiryTime = new Date(latestSub.current_period_end).getTime()
-                if (expiryTime <= Date.now()) {
+                if (expiryTime <= now) {
                   isExpired = true
                 }
               }
 
               if (isExpired) {
-                // Subscription has expired: update database to inactive status
                 await adminSupabase
                   .from('profiles')
                   .update({
@@ -105,18 +126,17 @@ export async function GET(request: NextRequest) {
 
                 finalRedirect = '/billing'
               } else {
-                // Active and within validity period: take directly to dashboard
                 finalRedirect = next && next !== '/billing' ? next : '/portal/admin/dashboard'
               }
             } else {
-              // Status is inactive or past_due
+              // Inactive status
               finalRedirect = '/billing'
             }
           }
         }
       } catch (err) {
         console.warn('Subscription status check in auth callback:', err)
-        finalRedirect = '/billing'
+        finalRedirect = '/onboarding'
       }
 
       const forwardedHost = request.headers.get('x-forwarded-host')

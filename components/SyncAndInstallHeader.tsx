@@ -10,6 +10,7 @@ import {
   X, CheckCircle2, ShieldCheck, LogOut, Sparkles, AlertCircle, 
   User, CreditCard 
 } from 'lucide-react';
+import InstallModal from './InstallModal';
 
 export default function SyncAndInstallHeader() {
   const router = useRouter();
@@ -60,17 +61,8 @@ export default function SyncAndInstallHeader() {
     };
   }, []);
 
-  const handleInstallClick = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        setIsInstalled(true);
-      }
-      setDeferredPrompt(null);
-    } else {
-      setShowInstallModal(true);
-    }
+  const handleInstallClick = () => {
+    setShowInstallModal(true);
   };
 
   const handleSignOut = async () => {
@@ -134,7 +126,7 @@ export default function SyncAndInstallHeader() {
         {/* Install App Button */}
         <button
           onClick={handleInstallClick}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20 border border-[var(--primary)]/20 transition-colors shadow-2xs"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20 border border-[var(--primary)]/20 transition-colors shadow-2xs cursor-pointer"
           title="Install as Android APK or Windows Desktop App"
         >
           <Download className="w-3.5 h-3.5" />
@@ -151,7 +143,7 @@ export default function SyncAndInstallHeader() {
             <img src={userAvatar} alt="Avatar" className="w-6 h-6 rounded-lg object-cover border border-[var(--primary)]" />
           ) : (
             <div className="w-6 h-6 rounded-lg bg-[var(--accent-light)] text-[var(--primary)] flex items-center justify-center text-xs font-bold">
-              {userEmail ? userEmail.charAt(0).toUpperCase() : '👨‍🌾'}
+              <User className="w-3.5 h-3.5" />
             </div>
           )}
           <div className="text-left hidden lg:block">
@@ -174,60 +166,16 @@ export default function SyncAndInstallHeader() {
         </button>
       </div>
 
-      {/* App Install Modal (Windows & Android Guide) */}
-      {showInstallModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[var(--bg-card)] rounded-3xl p-6 sm:p-8 max-w-lg w-full border border-[var(--border)] luxury-shadow relative max-h-[90vh] overflow-y-auto">
-            <button onClick={() => setShowInstallModal(false)} className="absolute top-6 right-6 p-2 rounded-full hover:bg-gray-100 transition-colors">
-              <X className="w-5 h-5 text-[var(--text-muted)]" />
-            </button>
-
-            <div className="text-center mb-6">
-              <img src="/logo.svg" alt="Lactis" className="h-16 w-auto object-contain mx-auto mb-3" />
-              <h2 className="text-2xl font-black text-[var(--text-main)]">Install App</h2>
-              <p className="text-xs text-[var(--text-muted)] mt-1">
-                Install as standalone software on Windows PC or native App on Android devices.
-              </p>
-            </div>
-
-            <div className="space-y-4 mb-6">
-              {/* Android Card */}
-              <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <Smartphone className="w-5 h-5 text-emerald-700" />
-                  <h3 className="font-bold text-sm text-emerald-900">Android Phone / Tablet (APK / PWA)</h3>
-                </div>
-                <ol className="text-xs text-emerald-800 space-y-1.5 list-decimal list-inside font-medium">
-                  <li>Open this web address in <strong>Google Chrome</strong> or <strong>Samsung Internet</strong>.</li>
-                  <li>Tap the <strong>3 dots (⋮)</strong> menu icon at the top right of your browser.</li>
-                  <li>Tap <strong>&quot;Install App&quot;</strong> or <strong>&quot;Add to Home Screen&quot;</strong>.</li>
-                  <li>The app will install directly with full offline database and camera support!</li>
-                </ol>
-              </div>
-
-              {/* Windows PC Card */}
-              <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <Monitor className="w-5 h-5 text-blue-700" />
-                  <h3 className="font-bold text-sm text-blue-900">Windows PC / Desktop Software</h3>
-                </div>
-                <ol className="text-xs text-blue-800 space-y-1.5 list-decimal list-inside font-medium">
-                  <li>In <strong>Microsoft Edge</strong> or <strong>Chrome</strong>, look at the URL address bar.</li>
-                  <li>Click the <strong>Install App icon (⊕ or 💻)</strong> on the right side of the address bar.</li>
-                  <li>Click <strong>&quot;Install&quot;</strong>. It launches in its own dedicated window and creates a Desktop shortcut!</li>
-                </ol>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowInstallModal(false)}
-              className="w-full bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-bold py-3 rounded-xl transition-all shadow-md text-sm"
-            >
-              Got it, Done!
-            </button>
-          </div>
-        </div>
-      )}
+      {/* App Install Modal (Windows, Android & iOS Multi-Platform Guide) */}
+      <InstallModal
+        isOpen={showInstallModal}
+        onClose={() => setShowInstallModal(false)}
+        deferredPrompt={deferredPrompt}
+        onPromptAccepted={() => {
+          setIsInstalled(true);
+          setDeferredPrompt(null);
+        }}
+      />
     </>
   );
 }

@@ -1,4 +1,4 @@
-export type PlanKey = 'starter' | 'pro' | 'enterprise';
+export type PlanKey = 'trial' | 'starter' | 'pro';
 
 export interface PlanDetail {
   id: PlanKey;
@@ -18,10 +18,32 @@ export interface PlanDetail {
 
 /**
  * 💡 CENTRALIZED PRICING CONFIGURATION
- * To change Plan 1 (Starter) price (e.g. to 50 for testing, or back to 199):
- * Simply edit `introPrice: 50` below!
+ * Plan 1: 15-Day Free Trial (₨ 0)
+ * Plan 2: Starter Monthly (₨ 50 introductory)
+ * Plan 3: Farm Pro Annual (₨ 183 / mo billed annually at ₨ 2,199)
  */
 export const SUBSCRIPTION_PLANS: Record<PlanKey, PlanDetail> = {
+  trial: {
+    id: 'trial',
+    name: '15-Day Free Trial',
+    duration: '15 Days Full Access',
+    badge: '100% FREE TRIAL',
+    bestValue: false,
+    introPrice: 0,
+    renewalPrice: 0,
+    discountPercent: 100,
+    effectiveMonthly: 0,
+    savingsPKR: 449,
+    cattleLimit: 'Unlimited Livestock for 15 Days',
+    features: [
+      '15 Days Full Access to All ERP Features',
+      'Unlimited Cattle & Livestock Directory',
+      'Milking Logs & Production Tracking',
+      'Customer Khata & Ledger Management',
+      'Feed & Expense Logging Engine',
+      'PWA Mobile & Tablet Offline Mode (Daily Check-in)'
+    ]
+  },
   starter: {
     id: 'starter',
     name: 'Starter Monthly',
@@ -31,7 +53,7 @@ export const SUBSCRIPTION_PLANS: Record<PlanKey, PlanDetail> = {
     discountPercent: 89,
     effectiveMonthly: 50,
     savingsPKR: 399,
-    cattleLimit: 'Up to 60 Head of Cattle',
+    cattleLimit: 'Up to 25 Head of Cattle',
     features: [
       'Up to 25 Cattle & Livestock Directory',
       'Daily Milking Yield & Production Logging',
@@ -62,29 +84,6 @@ export const SUBSCRIPTION_PLANS: Record<PlanKey, PlanDetail> = {
       'Automated Vaccination & Calving Alerts',
       'Interactive Analytics & Lifetime Leaderboards',
       '100% Offline-First Mode on Remote Barns'
-    ]
-  },
-  enterprise: {
-    id: 'enterprise',
-    name: 'Commercial Enterprise',
-    duration: '2 Full Years (24 Months)',
-    badge: 'MAXIMUM SAVINGS (2 YEARS)',
-    bestValue: true,
-    introPrice: 4999,
-    renewalPrice: 6499,
-    discountPercent: 49,
-    effectiveMonthly: 210,
-    savingsPKR: 5277,
-    cattleLimit: 'Unlimited Multi-Farm Operations',
-    features: [
-      'Everything in Farm Pro Plan',
-      'Multiple Sheds & Farm Branch Locations',
-      'Multi-Employee Milker & Feeder MPIN Kiosk',
-      'Dedicated Cloud Database Vault & Backups',
-      'Custom Financial, Sales & Tax PDF/Excel Exports',
-      '24/7 Priority Phone & WhatsApp VIP Support',
-      'Free Farm Setup & Staff Onboarding Assistance',
-      'Price Lock Guarantee for Renewals'
     ]
   }
 };

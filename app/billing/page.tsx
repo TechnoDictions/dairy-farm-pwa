@@ -10,16 +10,22 @@ import {
 } from 'lucide-react';
 import { SUBSCRIPTION_PLANS, PlanKey } from '@/config/subscription';
 
+import { getDeviceFingerprint } from '@/utils/deviceFingerprint';
+
 function BillingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
 
   const [user, setUser] = useState<any>(null);
+  const [profileData, setProfileData] = useState<any>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [isSubActive, setIsSubActive] = useState(false);
+  const [isTrialActive, setIsTrialActive] = useState(false);
+  const [trialDaysLeft, setTrialDaysLeft] = useState<number>(0);
   const [selectedPlan, setSelectedPlan] = useState<PlanKey>('starter');
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [isStartingTrial, setIsStartingTrial] = useState(false);
   const [processingPlanId, setProcessingPlanId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
 
@@ -33,29 +39,42 @@ function BillingContent() {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           setUser(user);
-          // Check profile subscription status
+          // Check profile subscription & trial status
           const { data: profile } = await supabase
             .from('profiles')
-            .select('subscription_status')
+            .select('*')
             .eq('id', user.id)
             .maybeSingle();
 
-          if (profile?.subscription_status === 'active') {
-            const { data: latestSub } = await supabase
-              .from('subscriptions')
-              .select('current_period_end, status')
-              .eq('user_id', user.id)
-              .eq('status', 'active')
-              .order('current_period_end', { ascending: false })
-              .limit(1)
-              .maybeSingle();
+          if (profile) {
+            setProfileData(profile);
 
-            const isExpired = latestSub?.current_period_end
-              ? new Date(latestSub.current_period_end).getTime() <= Date.now()
-              : false;
+            if (profile.subscription_status === 'trial') {
+              const now = Date.now();
+              const endsAt = profile.trial_ends_at ? new Date(profile.trial_ends_at).getTime() : 0;
+              if (endsAt > now) {
+                setIsSubActive(true);
+                setIsTrialActive(true);
+                const remaining = Math.max(1, Math.ceil((endsAt - now) / (1000 * 60 * 60 * 24)));
+                setTrialDaysLeft(remaining);
+              }
+            } else if (profile.subscription_status === 'active') {
+              const { data: latestSub } = await supabase
+                .from('subscriptions')
+                .select('current_period_end, status')
+                .eq('user_id', user.id)
+                .eq('status', 'active')
+                .order('current_period_end', { ascending: false })
+                .limit(1)
+                .maybeSingle();
 
-            if (!isExpired) {
-              setIsSubActive(true);
+              const isExpired = latestSub?.current_period_end
+                ? new Date(latestSub.current_period_end).getTime() <= Date.now()
+                : false;
+
+              if (!isExpired) {
+                setIsSubActive(true);
+              }
             }
           }
         }
@@ -87,9 +106,40 @@ function BillingContent() {
 
       return () => clearInterval(interval);
     }
-  }, [statusParam]);
+  }, [statusParam, supabase]);
+
+  const handleStartFreeTrial = async () => {
+    setIsStartingTrial(true);
+    setErrorMessage('');
+
+    try {
+      const deviceFingerprint = await getDeviceFingerprint();
+      const res = await fetch('/api/trial/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceFingerprint }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to activate 15-day free trial.');
+      }
+
+      setIsSubActive(true);
+      setIsTrialActive(true);
+      router.push(data.redirectUrl || '/portal/admin/dashboard');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Error activating free trial. Please try again.');
+      setIsStartingTrial(false);
+    }
+  };
 
   const handleProceedToCheckout = async (planId: PlanKey) => {
+    if (planId === 'trial') {
+      await handleStartFreeTrial();
+      return;
+    }
+
     setSelectedPlan(planId);
     setProcessingPlanId(planId);
     setIsRedirecting(true);
@@ -108,7 +158,7 @@ function BillingContent() {
         throw new Error(data.error || 'Failed to initialize payment gateway checkout session.');
       }
 
-      // External Hosted Gateway Redirect: Send user away from localhost to official secure gateway
+      // External Hosted Gateway Redirect
       window.location.href = data.checkoutUrl;
     } catch (err: any) {
       setErrorMessage(err.message || 'Error connecting to payment processor. Please try again.');
@@ -131,7 +181,7 @@ function BillingContent() {
           <Link href="/" className="flex items-center gap-3">
             <img src="/logo.svg" alt="Lactis" className="h-12 sm:h-14 w-auto object-contain" />
             <span className="hidden sm:inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#0B6AB5]/10 text-[#0B6AB5] border border-[#0B6AB5]/20">
-              Billing & Subscription
+              Billing & Subscriptions
             </span>
           </Link>
 
@@ -155,6 +205,31 @@ function BillingContent() {
 
       {/* Main Billing Body */}
       <main className="max-w-7xl mx-auto px-6 py-12 flex-1 w-full space-y-10">
+        {/* Active Subscription Banner */}
+        {isSubActive && (
+          <div className="max-w-4xl mx-auto p-6 rounded-3xl bg-emerald-50 border-2 border-emerald-400 text-emerald-950 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="w-8 h-8 text-emerald-600 shrink-0" />
+              <div>
+                <h4 className="font-black text-base text-emerald-900">
+                  {isTrialActive ? `15-Day Free Trial Active (${trialDaysLeft} Days Remaining)` : 'Official Farm Subscription Active'}
+                </h4>
+                <p className="text-xs text-emerald-700 font-medium">
+                  {isTrialActive 
+                    ? 'Your farm workspace is completely unlocked with full ERP privileges.' 
+                    : 'Your SaaS cloud farm license is fully operational.'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => router.push('/portal/admin/dashboard')}
+              className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider transition-all shadow active:scale-95 shrink-0"
+            >
+              Enter Dashboard →
+            </button>
+          </div>
+        )}
+
         {/* Status Callouts */}
         {statusParam === 'cancelled' && (
           <div className="max-w-3xl mx-auto p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold flex items-center justify-between">
@@ -212,46 +287,113 @@ function BillingContent() {
         <div className="text-center max-w-3xl mx-auto space-y-4">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#0B6AB5]/10 border border-[#0B6AB5]/20 text-[#0B6AB5] text-xs font-black uppercase tracking-wider">
             <Sparkles className="w-3.5 h-3.5 text-[#249D4A]" />
-            Official SaaS Licensing • Production Safepay Gateway
+            Official SaaS Licensing & Free Trial
           </div>
 
           <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight text-[var(--text-main)]">
-            Choose Your <span className="bg-gradient-to-r from-[#0B6AB5] to-[#249D4A] bg-clip-text text-transparent">Subscription Plan</span>
+            Choose Your <span className="bg-gradient-to-r from-[#0B6AB5] to-[#249D4A] bg-clip-text text-transparent">Farm Workspace Plan</span>
           </h1>
 
           <p className="text-sm sm:text-base text-[var(--text-muted)] font-medium max-w-2xl mx-auto leading-relaxed">
-            Select the plan that fits your farm operations. Clicking &ldquo;Proceed to Checkout&rdquo; securely redirects you to Safepay to complete payment.
+            Start risk-free with our 15-Day Free Trial, or select a high-performance commercial plan designed for Pakistani dairy operations.
           </p>
         </div>
 
-        {/* 3 Pricing Cards */}
+        {/* 3 Pricing Cards: 15-Day Trial, Starter Monthly, Farm Pro Annual */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch max-w-6xl mx-auto">
-          {/* PLAN 1: STARTER */}
+          {/* PLAN 1: 15-DAY FREE TRIAL */}
           <div className="bg-[var(--bg-card)] rounded-3xl p-8 border-2 border-emerald-500 shadow-xl flex flex-col justify-between card-hover relative overflow-hidden">
             <div className="absolute top-0 right-0 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-bl-xl shadow-xs">
-              ₨ {SUBSCRIPTION_PLANS.starter.effectiveMonthly} / MO
+              {SUBSCRIPTION_PLANS.trial.badge}
             </div>
 
             <div className="space-y-6">
               <div className="space-y-1">
-                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-700">Tier 1 • Small Sheds</span>
-                <h3 className="text-2xl font-black text-[var(--text-main)]">{SUBSCRIPTION_PLANS.starter.name}</h3>
-                <p className="text-xs text-[var(--text-muted)] font-medium">{SUBSCRIPTION_PLANS.starter.duration}</p>
+                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-700">No Credit Card Required</span>
+                <h3 className="text-2xl font-black text-[var(--text-main)]">{SUBSCRIPTION_PLANS.trial.name}</h3>
+                <p className="text-xs text-[var(--text-muted)] font-medium">{SUBSCRIPTION_PLANS.trial.duration}</p>
               </div>
 
               <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-1.5">
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl sm:text-4xl font-black text-emerald-800">
+                    ₨ 0
+                  </span>
+                  <span className="text-xs font-bold text-emerald-700">/ 15 Days</span>
+                  <span className="ml-auto px-2 py-0.5 rounded-md bg-[#249D4A] text-white text-[11px] font-black">
+                    FREE
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-[var(--text-muted)] font-medium pt-1 border-t border-emerald-200/60">
+                  <span className="font-bold text-emerald-900">Total: ₨ 0 for 15 Days</span>
+                  <span className="text-emerald-700 font-semibold">1 Trial Per Farm</span>
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  Daily online check-in • Full access to all farm features
+                </p>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <p className="font-bold text-[var(--text-main)] uppercase tracking-wider text-[11px]">Included Features:</p>
+                <ul className="space-y-2.5">
+                  {SUBSCRIPTION_PLANS.trial.features.map((f, idx) => (
+                    <li key={idx} className="flex items-start gap-2.5 text-[var(--text-main)] font-medium">
+                      <Check className="w-4 h-4 text-[#249D4A] shrink-0 mt-0.5" />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {profileData?.trial_used ? (
+              <button
+                disabled
+                className="mt-8 w-full py-4 rounded-2xl bg-gray-100 text-gray-400 font-black text-xs uppercase tracking-wider border border-gray-300 cursor-not-allowed text-center"
+              >
+                15-Day Free Trial Already Used
+              </button>
+            ) : (
+              <button
+                onClick={handleStartFreeTrial}
+                disabled={isStartingTrial || isRedirecting}
+                className="mt-8 w-full py-4 rounded-2xl bg-gradient-to-r from-[#249D4A] to-[#1e823d] hover:opacity-95 text-white font-black text-sm tracking-wider shadow-lg transition-all active:scale-98 flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                {isStartingTrial ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" /> Activating Trial...
+                  </>
+                ) : (
+                  <>
+                    Start 15-Day Free Trial <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+
+          {/* PLAN 2: STARTER */}
+          <div className="bg-[var(--bg-card)] rounded-3xl p-8 border border-[var(--border)] shadow-md flex flex-col justify-between card-hover relative overflow-hidden">
+            <div className="space-y-6">
+              <div className="space-y-1">
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">Tier 1 • Small Sheds</span>
+                <h3 className="text-2xl font-black text-[var(--text-main)]">{SUBSCRIPTION_PLANS.starter.name}</h3>
+                <p className="text-xs text-[var(--text-muted)] font-medium">{SUBSCRIPTION_PLANS.starter.duration}</p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl sm:text-4xl font-black text-slate-900">
                     ₨ {SUBSCRIPTION_PLANS.starter.effectiveMonthly}
                   </span>
-                  <span className="text-xs font-bold text-emerald-700">/ month</span>
+                  <span className="text-xs font-bold text-slate-600">/ month</span>
                   <span className="ml-auto px-2 py-0.5 rounded-md bg-[#249D4A] text-white text-[11px] font-black">
                     {SUBSCRIPTION_PLANS.starter.discountPercent}% OFF
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-xs text-[var(--text-muted)] font-medium pt-1 border-t border-emerald-200/60">
-                  <span className="font-bold text-emerald-900">Total: ₨ {SUBSCRIPTION_PLANS.starter.introPrice} (1st month)</span>
-                  <span className="text-emerald-700 font-semibold">Save ₨ {SUBSCRIPTION_PLANS.starter.savingsPKR}</span>
+                <div className="flex items-center justify-between text-xs text-[var(--text-muted)] font-medium pt-1 border-t border-slate-200/60">
+                  <span className="font-bold text-slate-900">Total: ₨ {SUBSCRIPTION_PLANS.starter.introPrice} (1st month)</span>
+                  <span className="font-bold text-emerald-700">Save ₨ {SUBSCRIPTION_PLANS.starter.savingsPKR}</span>
                 </div>
                 <p className="text-[10px] text-slate-500">
                   Renews at ₨ {SUBSCRIPTION_PLANS.starter.renewalPrice}/mo after 1st month
@@ -274,12 +416,12 @@ function BillingContent() {
             <button
               onClick={() => handleProceedToCheckout('starter')}
               disabled={isRedirecting}
-              className="mt-8 w-full py-4 rounded-2xl bg-gradient-to-r from-[#249D4A] to-[#1e823d] hover:opacity-95 text-white font-black text-sm tracking-wider shadow-lg transition-all active:scale-98 flex items-center justify-center gap-2 disabled:opacity-60"
+              className="mt-8 w-full py-4 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs tracking-wider shadow-md transition-all active:scale-98 flex items-center justify-center gap-2 disabled:opacity-60"
             >
               {processingPlanId === 'starter' ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  Connecting to Safepay...
+                  Connecting to Paddle...
                 </>
               ) : (
                 <>
@@ -289,10 +431,10 @@ function BillingContent() {
             </button>
           </div>
 
-          {/* PLAN 2: PRO */}
+          {/* PLAN 3: PRO */}
           <div className="bg-[var(--bg-card)] rounded-3xl p-8 border-2 border-[#0B6AB5] shadow-2xl flex flex-col justify-between card-hover relative overflow-hidden">
             <div className="absolute top-0 right-0 bg-gradient-to-r from-[#0B6AB5] to-[#249D4A] text-white text-[10px] font-black uppercase tracking-widest px-5 py-1.5 rounded-bl-2xl shadow-sm">
-              ⭐ {SUBSCRIPTION_PLANS.pro.badge}
+              {SUBSCRIPTION_PLANS.pro.badge}
             </div>
 
             <div className="space-y-6">
@@ -342,74 +484,11 @@ function BillingContent() {
               {processingPlanId === 'pro' ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  Connecting to Safepay...
+                  Connecting to Paddle...
                 </>
               ) : (
                 <>
                   Proceed to Checkout (₨ {SUBSCRIPTION_PLANS.pro.effectiveMonthly}/mo • Total ₨ {SUBSCRIPTION_PLANS.pro.introPrice.toLocaleString()}) <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </div>
-
-          {/* PLAN 3: ENTERPRISE */}
-          <div className="bg-[var(--bg-card)] rounded-3xl p-8 border border-[var(--border)] luxury-shadow flex flex-col justify-between card-hover relative overflow-hidden">
-            <div className="absolute top-0 right-0 bg-slate-900 text-amber-300 text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-bl-2xl">
-              🏆 24-MONTH LOCK-IN
-            </div>
-
-            <div className="space-y-6">
-              <div className="space-y-1">
-                <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">Tier 3 • Multi-Farm & VIP</span>
-                <h3 className="text-2xl font-black text-[var(--text-main)]">{SUBSCRIPTION_PLANS.enterprise.name}</h3>
-                <p className="text-xs text-[var(--text-muted)] font-medium">{SUBSCRIPTION_PLANS.enterprise.duration}</p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl sm:text-4xl font-black text-[var(--text-main)]">
-                    ₨ {SUBSCRIPTION_PLANS.enterprise.effectiveMonthly}
-                  </span>
-                  <span className="text-xs font-bold text-slate-600">/ month</span>
-                  <span className="ml-auto px-2 py-0.5 rounded-md bg-[#249D4A] text-white text-[11px] font-black">
-                    {SUBSCRIPTION_PLANS.enterprise.discountPercent}% OFF
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs text-[var(--text-muted)] font-medium pt-1 border-t border-slate-200/60">
-                  <span className="font-bold text-slate-900">Total: ₨ {SUBSCRIPTION_PLANS.enterprise.introPrice.toLocaleString()} for 2 years</span>
-                  <span className="font-bold text-emerald-700">Save ₨ {SUBSCRIPTION_PLANS.enterprise.savingsPKR.toLocaleString()}</span>
-                </div>
-                <p className="text-[10px] text-slate-500">
-                  Locked for 24 months • Renews at ₨ {SUBSCRIPTION_PLANS.enterprise.renewalPrice.toLocaleString()}/2yr
-                </p>
-              </div>
-
-              <div className="space-y-3 text-xs">
-                <p className="font-bold text-[var(--text-main)] uppercase tracking-wider text-[11px]">Enterprise Privileges:</p>
-                <ul className="space-y-2.5">
-                  {SUBSCRIPTION_PLANS.enterprise.features.map((f, idx) => (
-                    <li key={idx} className="flex items-start gap-2.5 text-[var(--text-main)] font-medium">
-                      <Check className="w-4 h-4 text-[#249D4A] shrink-0 mt-0.5" />
-                      <span>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            <button
-              onClick={() => handleProceedToCheckout('enterprise')}
-              disabled={isRedirecting}
-              className="mt-8 w-full py-4 rounded-2xl border-2 border-slate-800 text-slate-900 hover:bg-slate-900 hover:text-white font-extrabold text-xs tracking-wider transition-all shadow-sm active:scale-98 flex items-center justify-center gap-2 disabled:opacity-60"
-            >
-              {processingPlanId === 'enterprise' ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  Connecting to Safepay...
-                </>
-              ) : (
-                <>
-                  Proceed to Checkout (₨ {SUBSCRIPTION_PLANS.enterprise.effectiveMonthly}/mo • Total ₨ {SUBSCRIPTION_PLANS.enterprise.introPrice.toLocaleString()}) <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
@@ -421,21 +500,21 @@ function BillingContent() {
           <div className="flex items-start gap-3">
             <Lock className="w-5 h-5 text-[#0B6AB5] shrink-0" />
             <div>
-              <p className="font-black text-[var(--text-main)]">Safepay Production Security</p>
-              <p className="mt-0.5">256-bit encrypted state-bank compliant checkout infrastructure.</p>
+              <p className="font-black text-[var(--text-main)]">Paddle Global Billing</p>
+              <p className="mt-0.5">PCI-DSS Level 1 secure payments supporting Visa, Mastercard, Apple Pay, Google Pay & PayPal.</p>
             </div>
           </div>
           <div className="flex items-start gap-3">
             <Zap className="w-5 h-5 text-[#249D4A] shrink-0" />
             <div>
-              <p className="font-black text-[var(--text-main)]">Automated Webhook Sync</p>
+              <p className="font-black text-[var(--text-main)]">Instant Webhook Sync</p>
               <p className="mt-0.5">Your license activates automatically upon verified server settlement.</p>
             </div>
           </div>
           <div className="flex items-start gap-3">
             <HelpCircle className="w-5 h-5 text-amber-600 shrink-0" />
             <div>
-              <p className="font-black text-[var(--text-main)]">Pakistani Dairy Support</p>
+              <p className="font-black text-[var(--text-main)]">Dairy Farm Support</p>
               <p className="mt-0.5">Direct phone & WhatsApp assistance available anytime.</p>
             </div>
           </div>

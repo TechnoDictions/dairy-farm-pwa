@@ -245,8 +245,8 @@ export default function AccountAndSubscriptionPage() {
                   className="w-16 h-16 rounded-2xl border-2 border-[var(--primary)] object-cover shadow-sm"
                 />
               ) : (
-                <div className="w-16 h-16 rounded-2xl bg-[var(--accent-light)] text-[var(--primary)] flex items-center justify-center text-2xl font-black border-2 border-white shadow-sm">
-                  {user?.email ? user.email.charAt(0).toUpperCase() : '👨‍🌾'}
+                <div className="w-16 h-16 rounded-2xl bg-[var(--accent-light)] text-[var(--primary)] flex items-center justify-center border-2 border-white shadow-sm">
+                  <User className="w-8 h-8" />
                 </div>
               )}
 
@@ -369,31 +369,84 @@ export default function AccountAndSubscriptionPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Tier 1: Starter */}
-          <div className="bg-[var(--bg-card)] rounded-3xl p-6 border-2 border-emerald-500 shadow-md transition-all flex flex-col justify-between">
+          {/* Tier 1: 15-Day Free Trial */}
+          <div className="bg-[var(--bg-card)] rounded-3xl p-6 border-2 border-emerald-500 shadow-md transition-all flex flex-col justify-between relative overflow-hidden">
+            <div className="absolute top-0 right-0 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-bl-xl shadow-xs">
+              {SUBSCRIPTION_PLANS.trial.badge}
+            </div>
+
             <div>
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h3 className="text-lg font-black text-[var(--text-main)]">{SUBSCRIPTION_PLANS.starter.name}</h3>
-                  <p className="text-xs text-[var(--text-muted)] mt-1">{SUBSCRIPTION_PLANS.starter.duration}</p>
+                  <h3 className="text-lg font-black text-[var(--text-main)]">{SUBSCRIPTION_PLANS.trial.name}</h3>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">{SUBSCRIPTION_PLANS.trial.duration}</p>
                 </div>
-                <span className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center text-lg">
-                  🥛
+                <span className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-700">
+                  <Layers className="w-4 h-4" />
                 </span>
               </div>
 
               <div className="mb-6 p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-1.5">
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-black text-emerald-800">
+                    ₨ 0
+                  </span>
+                  <span className="text-xs font-bold text-emerald-700">/ 15 Days</span>
+                  <span className="ml-auto px-2 py-0.5 rounded-md bg-[#249D4A] text-white text-[10px] font-black">
+                    FREE
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-[var(--text-muted)] font-medium pt-1 border-t border-emerald-200/60">
+                  <span className="font-bold text-emerald-900">Total: ₨ 0 for 15 Days</span>
+                  <span className="font-bold text-emerald-700">1 Trial Per Farm</span>
+                </div>
+                <p className="text-[10px] text-slate-500 pt-0.5">
+                  Daily online check-in • Full ERP access
+                </p>
+              </div>
+
+              <ul className="space-y-3 text-xs font-medium text-[var(--text-main)] mb-6">
+                {SUBSCRIPTION_PLANS.trial.features.slice(0, 4).map((f, idx) => (
+                  <li key={idx} className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" /> {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <button
+              onClick={() => router.push('/billing')}
+              className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition-all shadow-md active:scale-95"
+            >
+              {profile?.subscription_status === 'trial' ? 'Trial Active (Manage)' : 'View Trial & Plans'}
+            </button>
+          </div>
+
+          {/* Tier 2: Starter */}
+          <div className="bg-[var(--bg-card)] rounded-3xl p-6 border border-[var(--border)] shadow-md transition-all flex flex-col justify-between">
+            <div>
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="text-lg font-black text-[var(--text-main)]">{SUBSCRIPTION_PLANS.starter.name}</h3>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">{SUBSCRIPTION_PLANS.starter.duration}</p>
+                </div>
+                <span className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700">
+                  <Building2 className="w-4 h-4" />
+                </span>
+              </div>
+
+              <div className="mb-6 p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-black text-slate-900">
                     ₨ {SUBSCRIPTION_PLANS.starter.effectiveMonthly}
                   </span>
-                  <span className="text-xs font-bold text-emerald-700">/ month</span>
+                  <span className="text-xs font-bold text-slate-600">/ month</span>
                   <span className="ml-auto px-2 py-0.5 rounded-md bg-[#249D4A] text-white text-[10px] font-black">
                     {SUBSCRIPTION_PLANS.starter.discountPercent}% OFF
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-xs text-[var(--text-muted)] font-medium pt-1 border-t border-emerald-200/60">
-                  <span className="font-bold text-emerald-900">Total: ₨ {SUBSCRIPTION_PLANS.starter.introPrice} (1st month)</span>
+                <div className="flex items-center justify-between text-xs text-[var(--text-muted)] font-medium pt-1 border-t border-slate-200/60">
+                  <span className="font-bold text-slate-900">Total: ₨ {SUBSCRIPTION_PLANS.starter.introPrice} (1st month)</span>
                   <span className="font-bold text-emerald-700">Save ₨ {SUBSCRIPTION_PLANS.starter.savingsPKR}</span>
                 </div>
                 <p className="text-[10px] text-slate-500 pt-0.5">
@@ -412,16 +465,16 @@ export default function AccountAndSubscriptionPage() {
 
             <button
               onClick={() => handleOpenPayment('starter')}
-              className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition-all shadow-md active:scale-95"
+              className="w-full py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs transition-all shadow-md active:scale-95"
             >
               Select Starter (₨ {SUBSCRIPTION_PLANS.starter.effectiveMonthly}/mo • Total ₨ {SUBSCRIPTION_PLANS.starter.introPrice})
             </button>
           </div>
 
-          {/* Tier 2: Farm Pro (Most Popular) */}
+          {/* Tier 3: Farm Pro (Most Popular) */}
           <div className="bg-[var(--bg-card)] rounded-3xl p-6 border-2 border-[#0B6AB5] shadow-xl flex flex-col justify-between relative overflow-hidden">
             <div className="absolute top-0 right-0 bg-[#0B6AB5] text-white text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-bl-xl shadow-xs">
-              ⭐ {SUBSCRIPTION_PLANS.pro.badge}
+              {SUBSCRIPTION_PLANS.pro.badge}
             </div>
 
             <div>
@@ -430,8 +483,8 @@ export default function AccountAndSubscriptionPage() {
                   <h3 className="text-lg font-black text-[var(--text-main)]">{SUBSCRIPTION_PLANS.pro.name}</h3>
                   <p className="text-xs text-[var(--text-muted)] mt-1">{SUBSCRIPTION_PLANS.pro.duration}</p>
                 </div>
-                <span className="w-8 h-8 rounded-xl bg-blue-100 flex items-center justify-center text-lg">
-                  👑
+                <span className="w-8 h-8 rounded-xl bg-blue-100 flex items-center justify-center text-[#0B6AB5]">
+                  <Award className="w-4 h-4" />
                 </span>
               </div>
 
@@ -468,59 +521,6 @@ export default function AccountAndSubscriptionPage() {
               className="w-full py-3.5 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-black text-xs transition-all shadow-md active:scale-95"
             >
               Select Farm Pro (₨ {SUBSCRIPTION_PLANS.pro.effectiveMonthly}/mo • Total ₨ {SUBSCRIPTION_PLANS.pro.introPrice.toLocaleString()})
-            </button>
-          </div>
-
-          {/* Tier 3: Enterprise (2 Years) */}
-          <div className="bg-[var(--bg-card)] rounded-3xl p-6 border border-[var(--border)] transition-all flex flex-col justify-between relative overflow-hidden">
-            <div className="absolute top-0 right-0 bg-slate-900 text-amber-300 text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-bl-xl shadow-xs">
-              🏆 2 Years Lock-In
-            </div>
-
-            <div>
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="text-lg font-black text-[var(--text-main)]">{SUBSCRIPTION_PLANS.enterprise.name}</h3>
-                  <p className="text-xs text-[var(--text-muted)] mt-1">{SUBSCRIPTION_PLANS.enterprise.duration}</p>
-                </div>
-                <span className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-lg">
-                  🏢
-                </span>
-              </div>
-
-              <div className="mb-6 p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-black text-[var(--text-main)]">
-                    ₨ {SUBSCRIPTION_PLANS.enterprise.effectiveMonthly}
-                  </span>
-                  <span className="text-xs font-bold text-slate-600">/ month</span>
-                  <span className="ml-auto px-2 py-0.5 rounded-md bg-[#249D4A] text-white text-[10px] font-black">
-                    {SUBSCRIPTION_PLANS.enterprise.discountPercent}% OFF
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs text-[var(--text-muted)] font-medium pt-1 border-t border-slate-200/60">
-                  <span className="font-bold text-slate-900">Total: ₨ {SUBSCRIPTION_PLANS.enterprise.introPrice.toLocaleString()} for 2 years</span>
-                  <span className="font-bold text-emerald-700">Save ₨ {SUBSCRIPTION_PLANS.enterprise.savingsPKR.toLocaleString()}</span>
-                </div>
-                <p className="text-[10px] text-slate-500 pt-0.5">
-                  Locked for 24 months • Renews at ₨ {SUBSCRIPTION_PLANS.enterprise.renewalPrice.toLocaleString()}/2yr
-                </p>
-              </div>
-
-              <ul className="space-y-3 text-xs font-medium text-[var(--text-main)] mb-6">
-                {SUBSCRIPTION_PLANS.enterprise.features.slice(0, 5).map((f, idx) => (
-                  <li key={idx} className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" /> {f}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <button
-              onClick={() => handleOpenPayment('enterprise')}
-              className="w-full py-3 rounded-xl border border-slate-800 text-slate-800 hover:bg-slate-800 hover:text-white font-bold text-xs transition-all"
-            >
-              Select Enterprise (₨ {SUBSCRIPTION_PLANS.enterprise.effectiveMonthly}/mo • Total ₨ {SUBSCRIPTION_PLANS.enterprise.introPrice.toLocaleString()})
             </button>
           </div>
         </div>
@@ -722,7 +722,7 @@ export default function AccountAndSubscriptionPage() {
                         {/* LIVE SIMULATED SMS BANNER */}
                         <div className="p-3 bg-slate-900 text-white rounded-xl shadow-xs space-y-1">
                           <div className="flex justify-between text-[10px] text-emerald-400 font-bold">
-                            <span>📲 SMS OTP Generated:</span>
+                            <span>SMS OTP Generated:</span>
                             <span>Just Now</span>
                           </div>
                           <p className="text-xs font-mono font-bold text-amber-300">
